@@ -7,15 +7,31 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// DB, controllers, SignalR, JWT...
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// JWT setup
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+});
+
+// JWT setup (same as before)
 var jwtKey = builder.Configuration["Jwt:Key"];
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -26,7 +42,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = false,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
         options.Events = new JwtBearerEvents
         {
@@ -37,6 +54,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chatHub"))
                     context.Token = accessToken;
                 return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                Console.WriteLine($"JWT Auth Failed: {context.Exception.Message}");
+                return Task.CompletedTask;
             }
         };
     });
@@ -45,7 +67,12 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Swagger UI
+// Serve static files from wwwroot
+app.UseStaticFiles();
+
+// Enable CORS **before** endpoints
+app.UseCors();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

@@ -49,6 +49,8 @@ namespace RealTimeConnect.Hubs
             foreach (var convoId in userConversations)
                 await Groups.AddToGroupAsync(Context.ConnectionId, convoId.ToString());
 
+            Console.WriteLine($"[ChatHub] ConnectionId: {Context.ConnectionId}, User: {Context.UserIdentifier}");
+
             await base.OnConnectedAsync();
         }
     }
